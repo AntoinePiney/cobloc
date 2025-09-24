@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualiseur GLB - Cobloc</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #F9F9F7;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .hero {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            transform: scale(0.5);
+            transition: transform 0.3s ease;
+        }
+        
+        #canvas-container.expanded {
+            transform: scale(1);
+        }
+        
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            z-index: 100;
+        }
+        
+        #icon {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 1000;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+        }
+        
+        #icon:hover {
+            opacity: 0.7;
+        }
+        
+        
+    </style>
+</head>
+<body>
+    <div id="loading">Chargement du modèle 3D...</div>
+    <div class="hero">
+        <div id="canvas-container">
+            <div id="icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none">
+                    <rect width="24" height="24" fill="white"/>
+                    <rect x="0.5" y="0.5" width="23" height="23" stroke="black" stroke-opacity="0.04"/>
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M13.6644 6.34314C13.6644 6.75735 14.0002 7.09314 14.4144 7.09314L16.907 7.09314V9.58578C16.907 9.99999 17.2428 10.3358 17.657 10.3358C18.0712 10.3358 18.407 9.99999 18.407 9.58578V6.34314C18.407 5.92893 18.0712 5.59314 17.657 5.59314L14.4144 5.59314C14.0002 5.59314 13.6644 5.92893 13.6644 6.34314Z" fill="black" fill-opacity="0.32"/>
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M17.657 13.6642C17.2428 13.6642 16.907 14 16.907 14.4142L16.907 16.9069L14.4143 16.9069C14.0001 16.9069 13.6643 17.2426 13.6643 17.6569C13.6643 18.0711 14.0001 18.4069 14.4143 18.4069L17.657 18.4069C18.0712 18.4069 18.407 18.0711 18.407 17.6569L18.407 14.4142C18.407 14 18.0712 13.6642 17.657 13.6642Z" fill="black" fill-opacity="0.32"/>
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M6.34329 13.6642C6.7575 13.6642 7.09329 14 7.09329 14.4142L7.09329 16.9069L9.58593 16.9069C10.0001 16.9069 10.3359 17.2426 10.3359 17.6569C10.3359 18.0711 10.0001 18.4069 9.58593 18.4069L6.34329 18.4069C5.92908 18.4069 5.59329 18.0711 5.59329 17.6569L5.59329 14.4142C5.59329 14 5.92907 13.6642 6.34329 13.6642Z" fill="black" fill-opacity="0.32"/>
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M10.3359 6.34314C10.3359 6.75735 10.0001 7.09314 9.5859 7.09314L7.09326 7.09314L7.09326 9.58578C7.09326 9.99999 6.75748 10.3358 6.34326 10.3358C5.92905 10.3358 5.59326 9.99999 5.59326 9.58578L5.59326 6.34314C5.59326 5.92893 5.92905 5.59314 6.34326 5.59314L9.5859 5.59314C10.0001 5.59314 10.3359 5.92893 10.3359 6.34314Z" fill="black" fill-opacity="0.32"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // Variables globales
+        let scene, camera, renderer, controls, model;
+        const loadingElement = document.getElementById('loading');
+        const canvasContainer = document.getElementById('canvas-container');
+        const iconElement = document.getElementById('icon');
+        
+        // État du canvas (agrandi ou non)
+        let isCanvasExpanded = false;
+        
+        // Variables pour le hover et wireframe
+        let raycaster, mouse;
+        let hoveredObject = null;
+        let meshes = [];
+        
+        // Variables pour l'audio
+        let audioContext;
+        let audioBuffers = [];
+        let currentAudioSource = null;
+        const audioFiles = [
+            './sample1.mp3',
+            './sample2.mp3',
+            './sample3.mp3',
+            './sample4.mp3',
+            './sample5.mp3',
+            './sample6.mp3'
+        ];
+        
+        // Variables pour la transition de background
+        let targetBgColor = new THREE.Color(0xD9D9D9);
+        let currentBgColor = new THREE.Color(0xD9D9D9);
+        const transitionSpeed = 0.05; // Vitesse de transition (0.01 = très lent, 0.1 = rapide)
+        
+        // Palette de 6 couleurs distinctes pour 6 meshes
+        const colorPalette = [
+            0xff0000, // Rouge
+            0x00ff00, // Vert
+            0x0000ff, // Bleu
+            0xffff00, // Jaune
+            0xff00ff, // Magenta
+            0x00ffff  // Cyan
+        ];
+        
+        // Couleurs de background au hover pour chaque mesh
+        const hoverBgColors = [
+            0xFFD097, // Rouge -> Orange clair
+            0xEAE2D8, // Vert -> Beige clair
+            0x885737, // Bleu -> Marron clair
+            0xD7DFE6, // Jaune -> Bleu très clair
+            0xFAEDD0, // Magenta -> Crème
+            0x8A8D8F  // Cyan -> Gris clair
+        ];
+
+        // Initialisation de la scène
+        function init() {
+            // Créer la scène
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xD9D9D9);
+
+            // Créer la caméra
+            camera = new THREE.PerspectiveCamera(22, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 5);
+
+            // Créer le renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1;
+            
+            canvasContainer.appendChild(renderer.domElement);
+
+            // Ajouter les contrôles orbitaux
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enableZoom = true;
+            controls.enablePan = true;
+
+            // Ajouter l'éclairage
+            setupLighting();
+
+            // Charger le modèle GLB
+            loadModel();
+
+            // Gérer le redimensionnement
+            window.addEventListener('resize', onWindowResize);
+
+            // Démarrer la boucle de rendu
+            animate();
+            
+            // Initialiser le raycaster pour la détection de hover
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            
+            // Ajouter les événements de hover
+            renderer.domElement.addEventListener('mousemove', onMouseHover);
+            
+            // Ajouter l'événement de clic sur l'icône
+            iconElement.addEventListener('click', toggleCanvasSize);
+            
+            // Initialiser l'audio
+            initAudio();
+        }
+
+
+        // Initialisation de l'audio
+        function initAudio() {
+            try {
+                // Créer le contexte audio
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Charger tous les fichiers audio
+                loadAudioFiles();
+            } catch (error) {
+                console.error('Erreur lors de l\'initialisation de l\'audio:', error);
+            }
+        }
+        
+        // Charger les fichiers audio
+        function loadAudioFiles() {
+            let loadedCount = 0;
+            
+            audioFiles.forEach((file, index) => {
+                fetch(file)
+                    .then(response => response.arrayBuffer())
+                    .then(data => audioContext.decodeAudioData(data))
+                    .then(buffer => {
+                        audioBuffers[index] = buffer;
+                        loadedCount++;
+                        console.log(`Audio chargé: ${file}`);
+                        
+                        if (loadedCount === audioFiles.length) {
+                            console.log('Tous les fichiers audio sont chargés');
+                        }
+                    })
+                    .catch(error => {
+                        console.error(`Erreur lors du chargement de ${file}:`, error);
+                    });
+            });
+        }
+        
+        // Jouer un son
+        function playSound(meshIndex) {
+            if (!audioContext || !audioBuffers[meshIndex]) {
+                console.log('Audio non disponible pour cette mesh');
+                return;
+            }
+            
+            // Arrêter le son précédent s'il y en a un
+            if (currentAudioSource) {
+                currentAudioSource.stop();
+            }
+            
+            try {
+                // Créer une nouvelle source audio
+                currentAudioSource = audioContext.createBufferSource();
+                currentAudioSource.buffer = audioBuffers[meshIndex];
+                currentAudioSource.connect(audioContext.destination);
+                
+                // Jouer le son
+                currentAudioSource.start();
+                console.log(`Son joué pour la mesh ${meshIndex + 1}`);
+            } catch (error) {
+                console.error('Erreur lors de la lecture du son:', error);
+            }
+        }
+        
+        // Arrêter le son actuel
+        function stopCurrentSound() {
+            if (currentAudioSource) {
+                try {
+                    currentAudioSource.stop();
+                    currentAudioSource = null;
+                } catch (error) {
+                    console.error('Erreur lors de l\'arrêt du son:', error);
+                }
+            }
+        }
+
+        // Configuration de l'éclairage
+        function setupLighting() {
+            // Lumière ambiante
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            // Lumière directionnelle principale
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 5, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            scene.add(directionalLight);
+
+            // Lumière de remplissage
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            fillLight.position.set(-5, 0, -5);
+            scene.add(fillLight);
+        }
+
+
+        // Charger le modèle GLB
+        function loadModel() {
+            const loader = new THREE.GLTFLoader();
+            
+            loader.load(
+                './coblocglb.glb',
+                function(gltf) {
+                    model = gltf.scene;
+                    
+                    // Calculer la bounding box pour centrer le modèle
+                    const box = new THREE.Box3().setFromObject(model);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    
+                    // Centrer le modèle
+                    model.position.sub(center);
+                    
+                    // Ajuster la position de la caméra selon la taille du modèle
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    // Position de la caméra pour une vue de face (distance fixe 2.1x)
+                    camera.position.set(0, 0, maxDim * 2.1);
+                    controls.target.set(0, 0, 0);
+                    controls.update();
+                    
+                    // Configurer les ombres et assigner des couleurs
+                    let meshCount = 0;
+                    meshes = []; // Réinitialiser le tableau des meshes
+                    
+                    model.traverse(function(child) {
+                        if (child.isMesh) {
+                            meshCount++;
+                            console.log(`Mesh ${meshCount} au chargement:`, child.name || 'Sans nom');
+                            
+                            // Utiliser une couleur fixe de la palette
+                            const colorIndex = (meshCount - 1) % colorPalette.length;
+                            const fixedColor = colorPalette[colorIndex];
+                            
+                            // Créer un nouveau matériau pour chaque mesh
+                            const newMaterial = new THREE.MeshStandardMaterial({
+                                color: fixedColor,
+                                metalness: 0.5,
+                                roughness: 0.5,
+                                wireframe: false // Initialement pas en wireframe
+                            });
+                            
+                            child.material = newMaterial;
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                            
+                            // Stocker la mesh dans le tableau pour le hover
+                            meshes.push(child);
+                            
+                            console.log(`Couleur assignée: #${fixedColor.toString(16).padStart(6, '0')}`);
+                        }
+                    });
+                    console.log(`Nombre total de meshes au chargement: ${meshCount}`);
+                    
+                    scene.add(model);
+                    
+                    // Masquer le message de chargement
+                    loadingElement.style.display = 'none';
+                    
+                    console.log('Modèle GLB chargé avec succès');
+                },
+                function(progress) {
+                    const percent = Math.round((progress.loaded / progress.total) * 100);
+                    loadingElement.textContent = `Chargement du modèle 3D... ${percent}%`;
+                },
+                function(error) {
+                    console.error('Erreur lors du chargement du modèle GLB:', error);
+                    loadingElement.textContent = 'Erreur lors du chargement du modèle 3D';
+                    loadingElement.style.color = '#ff4444';
+                }
+            );
+        }
+
+        // Gérer le redimensionnement de la fenêtre
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Boucle d'animation
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Mettre à jour les contrôles
+            controls.update();
+            
+            // Transition fluide du background
+            updateBackgroundTransition();
+            
+            // Rendu de la scène
+            renderer.render(scene, camera);
+        }
+        
+        // Fonction pour la transition fluide du background
+        function updateBackgroundTransition() {
+            // Interpoler la couleur actuelle vers la couleur cible
+            currentBgColor.lerp(targetBgColor, transitionSpeed);
+            
+            // Appliquer la couleur interpolée au background de la scène
+            scene.background = currentBgColor;
+        }
+
+        // Fonction de hover avec wireframe et changement de background
+        function onMouseHover(event) {
+            if (!meshes.length) {
+                console.log('Pas de meshes chargées');
+                return;
+            }
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(meshes);
+
+            if (intersects.length > 0) {
+                const target = intersects[0].object;
+                if (hoveredObject !== target) {
+                    hoveredObject = target;
+                    
+                    // Trouver l'index de la mesh survolée
+                    const meshIndex = meshes.indexOf(target);
+                    const bgColor = hoverBgColors[meshIndex % hoverBgColors.length];
+                    
+                    // Définir la couleur cible pour la transition fluide
+                    targetBgColor.setHex(bgColor);
+                    
+                    // Jouer le son correspondant à la mesh
+                    playSound(meshIndex);
+                    
+                    // Mettre toutes les meshes en wireframe sauf celle survolée
+                    meshes.forEach(mesh => {
+                        if (mesh === target) {
+                            // Mesh survolée : opacité normale, pas de wireframe
+                            mesh.material.opacity = 1;
+                            mesh.material.wireframe = false;
+                            mesh.material.transparent = false;
+                        } else {
+                            // Autres meshes : wireframe et opacité réduite
+                            mesh.material.opacity = 0.3;
+                            mesh.material.wireframe = true;
+                            mesh.material.transparent = true;
+                        }
+                    });
+                    
+                    console.log('Mesh survolée:', target.name || 'Sans nom', '- Background:', bgColor.toString(16));
+                }
+            } else {
+                if (hoveredObject) {
+                    // Arrêter le son actuel
+                    stopCurrentSound();
+                    
+                    // Définir la couleur cible par défaut pour la transition fluide
+                    targetBgColor.setHex(0xD9D9D9);
+                    
+                    // Remettre toutes les meshes en mode normal
+                    meshes.forEach(mesh => {
+                        mesh.material.opacity = 1;
+                        mesh.material.wireframe = false;
+                        mesh.material.transparent = false;
+                    });
+                    
+                    hoveredObject = null;
+                    console.log('Aucune mesh survolée - Background par défaut');
+                }
+            }
+        }
+
+        // Fonction pour basculer la taille du canvas
+        function toggleCanvasSize() {
+            isCanvasExpanded = !isCanvasExpanded;
+            
+            if (isCanvasExpanded) {
+                canvasContainer.classList.add('expanded');
+                console.log('Canvas agrandi à l\'échelle 1');
+            } else {
+                canvasContainer.classList.remove('expanded');
+                console.log('Canvas réduit à l\'échelle 0.5');
+            }
+        }
+
+        // Démarrer l'application
+        init();
+    </script>
+</body>
+</html>
