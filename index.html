@@ -101,6 +101,13 @@
         let hoveredObject = null;
         let meshes = [];
         
+        // Variables pour la rotation des meshes
+        let meshRotations = []; // Stocke les rotations cibles pour chaque mesh
+        let meshCurrentRotations = []; // Stocke les rotations actuelles pour l'ease
+        const rotationSpeed = 0.05; // Vitesse de rotation (0.01 = très lent, 0.1 = rapide)
+        const hoverRotationSpeed = 0.009; // Vitesse de rotation au hover
+        const easeSpeed = 0.08; // Vitesse de retour à la position normale
+        
         // Variables pour l'audio
         let audioContext;
         let audioBuffers = [];
@@ -114,30 +121,76 @@
             './sample6.mp3'
         ];
         
+        // Variables pour les textures
+        let textureLoader;
+        let loadedTextures = new Map(); // Cache des textures chargées
+        
         // Variables pour la transition de background
         let targetBgColor = new THREE.Color(0xD9D9D9);
         let currentBgColor = new THREE.Color(0xD9D9D9);
         const transitionSpeed = 0.05; // Vitesse de transition (0.01 = très lent, 0.1 = rapide)
         
-        // Palette de 6 couleurs distinctes pour 6 meshes
-        const colorPalette = [
-            0xff0000, // Rouge
-            0x00ff00, // Vert
-            0x0000ff, // Bleu
-            0xffff00, // Jaune
-            0xff00ff, // Magenta
-            0x00ffff  // Cyan
+        // Configuration détaillée pour chaque mesh
+        const meshConfigs = [
+            {
+                name: "Mesh 1",
+                type: "texture", // "color" ou "texture"
+                textureFile: './texture2.jpg', // Fichier de texture
+                color: 0xff0000, // Couleur de fallback si texture échoue
+                hoverBgColor: 0xFFD097, // Orange clair
+                audioFile: './sample1.mp3',
+                description: "Première mesh - Texture"
+            },
+            {
+                name: "Mesh 2", 
+                type: "texture",
+                textureFile: './texture1.jpg', // Fichier de texture
+                color: 0x00ff00, // Vert
+                hoverBgColor: 0xEAE2D8, // Beige clair
+                audioFile: './sample2.mp3',
+                description: "Deuxième mesh - Vert"
+            },
+            {
+                name: "Mesh 3",
+                type: "texture",
+                textureFile: './texture3.jpg', // Fichier de texture
+                color: 0x0000ff, // Bleu
+                hoverBgColor: 0x885737, // Marron clair
+                audioFile: './sample3.mp3',
+                description: "Troisième mesh - Bleu"
+            },
+            {
+                name: "Mesh 4",
+                type: "texture",
+                textureFile: './texture4.jpg', // Fichier de texture
+                color: 0xffff00, // Jaune
+                hoverBgColor: 0xD7DFE6, // Bleu très clair
+                audioFile: './sample4.mp3',
+                description: "Quatrième mesh - Jaune"
+            },
+            {
+                name: "Mesh 5",
+                type: "texture",
+                textureFile: './texture5.jpg', // Fichier de texture
+                color: 0xff00ff, // Magenta
+                hoverBgColor: 0xFAEDD0, // Crème
+                audioFile: './sample5.mp3',
+                description: "Cinquième mesh - Magenta"
+            },
+            {
+                name: "Mesh 6",
+                type: "texture",
+                textureFile: './texture6.jpg', // Fichier de texture
+                color: 0x00ffff, // Cyan
+                hoverBgColor: 0x8A8D8F, // Gris clair
+                audioFile: './sample6.mp3',
+                description: "Sixième mesh - Cyan"
+            }
         ];
         
-        // Couleurs de background au hover pour chaque mesh
-        const hoverBgColors = [
-            0xFFD097, // Rouge -> Orange clair
-            0xEAE2D8, // Vert -> Beige clair
-            0x885737, // Bleu -> Marron clair
-            0xD7DFE6, // Jaune -> Bleu très clair
-            0xFAEDD0, // Magenta -> Crème
-            0x8A8D8F  // Cyan -> Gris clair
-        ];
+        // Rétrocompatibilité - garder les anciens tableaux pour le code existant
+        const colorPalette = meshConfigs.map(config => config.color);
+        const hoverBgColors = meshConfigs.map(config => config.hoverBgColor);
 
         // Initialisation de la scène
         function init() {
@@ -149,13 +202,23 @@
             camera = new THREE.PerspectiveCamera(22, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 0, 5);
 
-            // Créer le renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            // Créer le renderer avec antialiasing amélioré
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true,
+                alpha: false,
+                powerPreference: "high-performance"
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limiter à 2x pour les performances
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1;
+            
+            // Améliorer la qualité du rendu
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.physicallyCorrectLights = true;
+            renderer.sortObjects = true;
             
             canvasContainer.appendChild(renderer.domElement);
 
@@ -168,6 +231,9 @@
 
             // Ajouter l'éclairage
             setupLighting();
+
+            // Initialiser le texture loader
+            textureLoader = new THREE.TextureLoader();
 
             // Charger le modèle GLB
             loadModel();
@@ -231,8 +297,10 @@
         
         // Jouer un son
         function playSound(meshIndex) {
+            const config = meshConfigs[meshIndex % meshConfigs.length];
+            
             if (!audioContext || !audioBuffers[meshIndex]) {
-                console.log('Audio non disponible pour cette mesh');
+                console.log(`Audio non disponible pour ${config.name} (${config.audioFile})`);
                 return;
             }
             
@@ -249,7 +317,7 @@
                 
                 // Jouer le son
                 currentAudioSource.start();
-                console.log(`Son joué pour la mesh ${meshIndex + 1}`);
+                console.log(`Son joué pour ${config.name}: ${config.audioFile}`);
             } catch (error) {
                 console.error('Erreur lors de la lecture du son:', error);
             }
@@ -266,25 +334,89 @@
                 }
             }
         }
+        
+        // Charger une texture
+        function loadTexture(textureFile) {
+            return new Promise((resolve, reject) => {
+                // Vérifier si la texture est déjà en cache
+                if (loadedTextures.has(textureFile)) {
+                    resolve(loadedTextures.get(textureFile));
+                    return;
+                }
+                
+                textureLoader.load(
+                    textureFile,
+                    function(texture) {
+                        // Configuration de la texture
+                        texture.wrapS = THREE.RepeatWrapping;
+                        texture.wrapT = THREE.RepeatWrapping;
+                        texture.flipY = false;
+                        texture.encoding = THREE.sRGBEncoding;
+                        
+                        // Mettre en cache
+                        loadedTextures.set(textureFile, texture);
+                        console.log(`Texture chargée: ${textureFile}`);
+                        resolve(texture);
+                    },
+                    function(progress) {
+                        console.log(`Chargement texture ${textureFile}: ${Math.round((progress.loaded / progress.total) * 100)}%`);
+                    },
+                    function(error) {
+                        console.error(`Erreur lors du chargement de la texture ${textureFile}:`, error);
+                        reject(error);
+                    }
+                );
+            });
+        }
+        
+        // Créer un matériau pour une mesh selon sa configuration
+        async function createMeshMaterial(config) {
+            if (config.type === "texture" && config.textureFile) {
+                try {
+                    const texture = await loadTexture(config.textureFile);
+                    return new THREE.MeshStandardMaterial({
+                        map: texture,
+                        metalness: 0.0, // Réduire la métallicité pour éclaircir
+                        roughness: 0.3, // Réduire la rugosité pour plus de brillance
+                        wireframe: false,
+                        flatShading: false,
+                        side: THREE.DoubleSide
+                    });
+                } catch (error) {
+                    console.warn(`Impossible de charger la texture ${config.textureFile}, utilisation de la couleur de fallback`);
+                }
+            }
+            
+            // Fallback vers la couleur
+            return new THREE.MeshStandardMaterial({
+                color: config.color,
+                metalness: 0.5,
+                roughness: 0.5,
+                wireframe: false,
+                flatShading: false,
+                side: THREE.DoubleSide
+            });
+        }
 
         // Configuration de l'éclairage
         function setupLighting() {
-            // Lumière ambiante
-            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            // Lumière ambiante plus intense pour éclaircir les textures
+            const ambientLight = new THREE.AmbientLight(0x404040, 1.2);
             scene.add(ambientLight);
 
-            // Lumière directionnelle principale
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            // Lumière directionnelle principale avec ombres haute qualité
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
             directionalLight.position.set(5, 5, 5);
             directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = 2048;
-            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.mapSize.width = 4096; // Augmenter la résolution des ombres
+            directionalLight.shadow.mapSize.height = 4096;
             directionalLight.shadow.camera.near = 0.5;
             directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.bias = -0.0001; // Réduire les artefacts d'ombres
             scene.add(directionalLight);
 
-            // Lumière de remplissage
-            const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            // Lumière de remplissage plus intense
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
             fillLight.position.set(-5, 0, -5);
             scene.add(fillLight);
         }
@@ -296,7 +428,7 @@
             
             loader.load(
                 './coblocglb.glb',
-                function(gltf) {
+                async function(gltf) {
                     model = gltf.scene;
                     
                     // Calculer la bounding box pour centrer le modèle
@@ -314,45 +446,63 @@
                     controls.target.set(0, 0, 0);
                     controls.update();
                     
-                    // Configurer les ombres et assigner des couleurs
+                    // Configurer les ombres et assigner des matériaux
                     let meshCount = 0;
                     meshes = []; // Réinitialiser le tableau des meshes
+                    
+                    // Charger tous les matériaux en parallèle
+                    const materialPromises = [];
                     
                     model.traverse(function(child) {
                         if (child.isMesh) {
                             meshCount++;
+                            const meshIndex = meshCount - 1;
+                            const config = meshConfigs[meshIndex % meshConfigs.length];
+                            
                             console.log(`Mesh ${meshCount} au chargement:`, child.name || 'Sans nom');
+                            console.log(`Configuration:`, config.description);
                             
-                            // Utiliser une couleur fixe de la palette
-                            const colorIndex = (meshCount - 1) % colorPalette.length;
-                            const fixedColor = colorPalette[colorIndex];
-                            
-                            // Créer un nouveau matériau pour chaque mesh
-                            const newMaterial = new THREE.MeshStandardMaterial({
-                                color: fixedColor,
-                                metalness: 0.5,
-                                roughness: 0.5,
-                                wireframe: false // Initialement pas en wireframe
+                            // Créer une promesse pour le matériau
+                            const materialPromise = createMeshMaterial(config).then(material => {
+                                child.material = material;
+                                child.castShadow = true;
+                                child.receiveShadow = true;
+                                
+                                // Stocker la mesh dans le tableau pour le hover
+                                meshes.push(child);
+                                
+                                if (config.type === "texture") {
+                                    console.log(`Texture assignée: ${config.textureFile}`);
+                                } else {
+                                    console.log(`Couleur assignée: #${config.color.toString(16).padStart(6, '0')}`);
+                                }
+                                console.log(`Couleur hover BG: #${config.hoverBgColor.toString(16).padStart(6, '0')}`);
+                                console.log(`Fichier audio: ${config.audioFile}`);
                             });
                             
-                            child.material = newMaterial;
-                            child.castShadow = true;
-                            child.receiveShadow = true;
-                            
-                            // Stocker la mesh dans le tableau pour le hover
-                            meshes.push(child);
-                            
-                            console.log(`Couleur assignée: #${fixedColor.toString(16).padStart(6, '0')}`);
+                            materialPromises.push(materialPromise);
                         }
                     });
-                    console.log(`Nombre total de meshes au chargement: ${meshCount}`);
                     
-                    scene.add(model);
-                    
-                    // Masquer le message de chargement
-                    loadingElement.style.display = 'none';
-                    
-                    console.log('Modèle GLB chargé avec succès');
+                    // Attendre que tous les matériaux soient chargés
+                    try {
+                        await Promise.all(materialPromises);
+                        console.log(`Nombre total de meshes au chargement: ${meshCount}`);
+                        
+                        // Initialiser les rotations des meshes
+                        initializeMeshRotations();
+                        
+                        scene.add(model);
+                        
+                        // Masquer le message de chargement
+                        loadingElement.style.display = 'none';
+                        
+                        console.log('Modèle GLB chargé avec succès');
+                    } catch (error) {
+                        console.error('Erreur lors du chargement des matériaux:', error);
+                        loadingElement.textContent = 'Erreur lors du chargement des matériaux';
+                        loadingElement.style.color = '#ff4444';
+                    }
                 },
                 function(progress) {
                     const percent = Math.round((progress.loaded / progress.total) * 100);
@@ -371,6 +521,7 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Maintenir le pixel ratio
         }
 
         // Boucle d'animation
@@ -382,6 +533,9 @@
             
             // Transition fluide du background
             updateBackgroundTransition();
+            
+            // Mettre à jour les rotations des meshes
+            updateMeshRotations();
             
             // Rendu de la scène
             renderer.render(scene, camera);
@@ -395,8 +549,47 @@
             // Appliquer la couleur interpolée au background de la scène
             scene.background = currentBgColor;
         }
+        
+        // Fonction pour gérer la rotation des meshes avec ease
+        function updateMeshRotations() {
+            if (!meshes.length) return;
+            
+            meshes.forEach((mesh, index) => {
+                if (mesh === hoveredObject) {
+                    // Mesh survolée : rotation continue sur les 3 axes à la même vitesse
+                    mesh.rotation.x += hoverRotationSpeed;
+                    mesh.rotation.y += hoverRotationSpeed;
+                    mesh.rotation.z += hoverRotationSpeed;
+                } else {
+                    // Autres meshes : retour à la position normale avec ease
+                    const targetRotation = meshRotations[index] || { x: 0, y: 0, z: 0 };
+                    
+                    // Ease vers la rotation cible
+                    mesh.rotation.x += (targetRotation.x - mesh.rotation.x) * easeSpeed;
+                    mesh.rotation.y += (targetRotation.y - mesh.rotation.y) * easeSpeed;
+                    mesh.rotation.z += (targetRotation.z - mesh.rotation.z) * easeSpeed;
+                }
+            });
+        }
+        
+        // Initialiser les rotations des meshes
+        function initializeMeshRotations() {
+            meshRotations = [];
+            meshCurrentRotations = [];
+            
+            meshes.forEach(mesh => {
+                // Stocker la rotation initiale
+                const initialRotation = {
+                    x: mesh.rotation.x,
+                    y: mesh.rotation.y,
+                    z: mesh.rotation.z
+                };
+                meshRotations.push(initialRotation);
+                meshCurrentRotations.push({ ...initialRotation });
+            });
+        }
 
-        // Fonction de hover avec wireframe et changement de background
+        // Fonction de hover avec wireframe, changement de background et rotation
         function onMouseHover(event) {
             if (!meshes.length) {
                 console.log('Pas de meshes chargées');
@@ -417,10 +610,10 @@
                     
                     // Trouver l'index de la mesh survolée
                     const meshIndex = meshes.indexOf(target);
-                    const bgColor = hoverBgColors[meshIndex % hoverBgColors.length];
+                    const config = meshConfigs[meshIndex % meshConfigs.length];
                     
                     // Définir la couleur cible pour la transition fluide
-                    targetBgColor.setHex(bgColor);
+                    targetBgColor.setHex(config.hoverBgColor);
                     
                     // Jouer le son correspondant à la mesh
                     playSound(meshIndex);
@@ -440,7 +633,8 @@
                         }
                     });
                     
-                    console.log('Mesh survolée:', target.name || 'Sans nom', '- Background:', bgColor.toString(16));
+                    console.log('Mesh survolée:', config.name, '- Description:', config.description);
+                    console.log('Background:', config.hoverBgColor.toString(16), '- Audio:', config.audioFile, '- Rotation activée');
                 }
             } else {
                 if (hoveredObject) {
@@ -458,7 +652,7 @@
                     });
                     
                     hoveredObject = null;
-                    console.log('Aucune mesh survolée - Background par défaut');
+                    console.log('Aucune mesh survolée - Background par défaut - Rotation arrêtée');
                 }
             }
         }
