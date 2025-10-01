@@ -12,7 +12,7 @@
         }
         
         body {
-            overflow: hidden;
+            overflow-x: hidden;
             background: #F9F9F7;
             font-family: Arial, sans-serif;
             margin: 0;
@@ -62,6 +62,39 @@
             opacity: 0.7;
         }
         
+        .gallery-section {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background: #F9F9F7;
+        }
+        
+        #gallery-canvas-container {
+            width: 100vw;
+            height: 100vh;
+            transform: scale(0.5);
+            transition: transform 0.3s ease;
+        }
+        
+        #gallery-canvas-container.expanded {
+            transform: scale(1);
+        }
+        
+        #gallery-icon {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 1000;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+        }
+        
+        #gallery-icon:hover {
+            opacity: 0.7;
+        }
         
     </style>
 </head>
@@ -82,13 +115,30 @@
         </div>
     </div>
 
+    <!-- Deuxième section - Galerie 3D -->
+    <div class="gallery-section">
+        <div id="gallery-canvas-container">
+            <div id="gallery-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none">
+                    <rect width="24" height="24" fill="white"/>
+                    <rect x="0.5" y="0.5" width="23" height="23" stroke="black" stroke-opacity="0.04"/>
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M13.6644 6.34314C13.6644 6.75735 14.0002 7.09314 14.4144 7.09314L16.907 7.09314V9.58578C16.907 9.99999 17.2428 10.3358 17.657 10.3358C18.0712 10.3358 18.407 9.99999 18.407 9.58578V6.34314C18.407 5.92893 18.0712 5.59314 17.657 5.59314L14.4144 5.59314C14.0002 5.59314 13.6644 5.92893 13.6644 6.34314Z" fill="black" fill-opacity="0.32"/>
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M17.657 13.6642C17.2428 13.6642 16.907 14 16.907 14.4142L16.907 16.9069L14.4143 16.9069C14.0001 16.9069 13.6643 17.2426 13.6643 17.6569C13.6643 18.0711 14.0001 18.4069 14.4143 18.4069L17.657 18.4069C18.0712 18.4069 18.407 18.0711 18.407 17.6569L18.407 14.4142C18.407 14 18.0712 13.6642 17.657 13.6642Z" fill="black" fill-opacity="0.32"/>
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M6.34329 13.6642C6.7575 13.6642 7.09329 14 7.09329 14.4142L7.09329 16.9069L9.58593 16.9069C10.0001 16.9069 10.3359 17.2426 10.3359 17.6569C10.3359 18.0711 10.0001 18.4069 9.58593 18.4069L6.34329 18.4069C5.92908 18.4069 5.59329 18.0711 5.59329 17.6569L5.59329 14.4142C5.59329 14 5.92907 13.6642 6.34329 13.6642Z" fill="black" fill-opacity="0.32"/>
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M10.3359 6.34314C10.3359 6.75735 10.0001 7.09314 9.5859 7.09314L7.09326 7.09314L7.09326 9.58578C7.09326 9.99999 6.75748 10.3358 6.34326 10.3358C5.92905 10.3358 5.59326 9.99999 5.59326 9.58578L5.59326 6.34314C5.59326 5.92893 5.92905 5.59314 6.34326 5.59314L9.5859 5.59314C10.0001 5.59314 10.3359 5.92893 10.3359 6.34314Z" fill="black" fill-opacity="0.32"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+    
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <script>
         // Variables globales
-        let scene, camera, renderer, controls, model;
+        let scene, camera, renderer, model;
         const loadingElement = document.getElementById('loading');
         const canvasContainer = document.getElementById('canvas-container');
         const iconElement = document.getElementById('icon');
@@ -129,6 +179,11 @@
         let targetBgColor = new THREE.Color(0xD9D9D9);
         let currentBgColor = new THREE.Color(0xD9D9D9);
         const transitionSpeed = 0.05; // Vitesse de transition (0.01 = très lent, 0.1 = rapide)
+        
+        // Variables pour le mouvement de caméra basé sur le scroll
+        let initialCameraY = 0; // Position Y initiale de la caméra
+        let scrollRange = 0; // Distance de scroll pour le mouvement complet
+        const cameraMovementFactor = 4; // Facteur d'amplification du mouvement (augmenté)
         
         // Configuration détaillée pour chaque mesh
         const meshConfigs = [
@@ -222,12 +277,7 @@
             
             canvasContainer.appendChild(renderer.domElement);
 
-            // Ajouter les contrôles orbitaux
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-            controls.enableZoom = true;
-            controls.enablePan = true;
+            // Contrôles orbitaux supprimés pour le premier canvas
 
             // Ajouter l'éclairage
             setupLighting();
@@ -240,6 +290,9 @@
 
             // Gérer le redimensionnement
             window.addEventListener('resize', onWindowResize);
+            
+            // Ajouter l'event listener pour le scroll
+            window.addEventListener('scroll', onScroll);
 
             // Démarrer la boucle de rendu
             animate();
@@ -443,8 +496,12 @@
                     const maxDim = Math.max(size.x, size.y, size.z);
                     // Position de la caméra pour une vue de face (distance fixe 2.1x)
                     camera.position.set(0, 0, maxDim * 2.1);
-                    controls.target.set(0, 0, 0);
-                    controls.update();
+                    
+                    // Stocker la position Y initiale pour le mouvement de scroll
+                    initialCameraY = camera.position.y;
+                    
+                    // Calculer la distance de scroll nécessaire (hauteur de la fenêtre)
+                    scrollRange = window.innerHeight;
                     
                     // Configurer les ombres et assigner des matériaux
                     let meshCount = 0;
@@ -522,20 +579,38 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Maintenir le pixel ratio
+            
+            // Recalculer la distance de scroll
+            scrollRange = window.innerHeight;
+        }
+        
+        // Gérer le mouvement de caméra basé sur le scroll
+        function onScroll() {
+            if (!scrollRange) return; // Attendre que le modèle soit chargé
+            
+            // Calculer le pourcentage de scroll (0 = en haut, 1 = en bas)
+            const scrollProgress = Math.min(window.scrollY / scrollRange, 1);
+            
+            // Calculer la nouvelle position Y de la caméra
+            // Plus on scroll, plus la caméra descend (contre-plongée)
+            const newY = initialCameraY - (scrollProgress * cameraMovementFactor);
+            
+            // Appliquer la nouvelle position Y à la caméra
+            camera.position.y = newY;
         }
 
         // Boucle d'animation
         function animate() {
             requestAnimationFrame(animate);
             
-            // Mettre à jour les contrôles
-            controls.update();
-            
             // Transition fluide du background
             updateBackgroundTransition();
             
             // Mettre à jour les rotations des meshes
             updateMeshRotations();
+            
+            // Maintenir le lookAt vers la scène
+            camera.lookAt(0, 0, 0);
             
             // Rendu de la scène
             renderer.render(scene, camera);
@@ -672,6 +747,263 @@
 
         // Démarrer l'application
         init();
+    </script>
+
+    <!-- Script pour la galerie 3D -->
+    <script>
+        // Variables globales pour la galerie 3D
+        let galleryScene, galleryCamera, galleryRenderer, galleryGroup;
+        let galleryMeshes = [];
+        let isGalleryDragging = false;
+        let previousGalleryMousePosition = { x: 0, y: 0 };
+        let hoveredGalleryMesh = null;
+        let galleryRaycaster, galleryMouse;
+        let galleryCanvasContainer, galleryIconElement;
+        let isGalleryCanvasExpanded = false;
+
+        // Positions des images dans la galerie (8 images seulement)
+        const imagePositions = [
+            { x: -3, y: 2, z: 0, scale: 1.2, color: 0xff6b6b, orientation: 'portrait' },
+            { x: 1, y: 3, z: -1, scale: 0.8, color: 0x4ecdc4, orientation: 'landscape' },
+            { x: -1, y: 0.5, z: 1, scale: 1, color: 0x45b7d1, orientation: 'portrait' },
+            { x: 0, y: -1, z: -0.5, scale: 0.9, color: 0xf7b731, orientation: 'landscape' },
+            { x: 3, y: 2, z: 0.5, scale: 1.1, color: 0x5f27cd, orientation: 'portrait' },
+            { x: 2.5, y: 0, z: -1, scale: 0.85, color: 0xee5a6f, orientation: 'landscape' },
+            { x: -2.5, y: -2, z: 0.5, scale: 0.9, color: 0x00d2d3, orientation: 'portrait' },
+            { x: 1, y: -2.5, z: -0.5, scale: 0.95, color: 0x1dd1a1, orientation: 'landscape' }
+        ];
+
+        // Initialiser la galerie 3D
+        function initGallery() {
+            galleryCanvasContainer = document.getElementById('gallery-canvas-container');
+            galleryIconElement = document.getElementById('gallery-icon');
+            if (!galleryCanvasContainer) return;
+
+            // Setup scene
+            galleryScene = new THREE.Scene();
+            galleryScene.background = new THREE.Color(0x000000);
+
+            // Setup camera
+            galleryCamera = new THREE.PerspectiveCamera(
+                60,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            // Position initiale de la caméra (sera ajustée selon la taille)
+            galleryCamera.position.z = 8;
+
+            // Setup renderer
+            galleryRenderer = new THREE.WebGLRenderer({ antialias: true });
+            galleryRenderer.setSize(window.innerWidth, window.innerHeight);
+            galleryRenderer.setPixelRatio(window.devicePixelRatio);
+            galleryCanvasContainer.appendChild(galleryRenderer.domElement);
+
+            // Create group for all images
+            galleryGroup = new THREE.Group();
+            galleryScene.add(galleryGroup);
+
+            // Create colored planes first
+            imagePositions.forEach((pos, index) => {
+                // Adjust geometry based on orientation
+                const width = pos.orientation === 'portrait' ? 1 : 1.6;
+                const height = pos.orientation === 'portrait' ? 1.5 : 1;
+                const geometry = new THREE.PlaneGeometry(width, height);
+                const material = new THREE.MeshBasicMaterial({
+                    color: pos.color,
+                    side: THREE.DoubleSide
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(pos.x, pos.y, pos.z);
+                mesh.scale.multiplyScalar(pos.scale);
+                mesh.userData.originalScale = pos.scale;
+                galleryGroup.add(mesh);
+                galleryMeshes.push(mesh);
+            });
+
+            // Create lines connecting images to center
+            const centerPoint = new THREE.Vector3(0, 0, 0);
+            const lineMaterial = new THREE.LineBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.50
+            });
+
+            imagePositions.forEach((pos) => {
+                const points = [];
+                points.push(new THREE.Vector3(pos.x, pos.y, pos.z));
+                points.push(centerPoint);
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                galleryGroup.add(line);
+            });
+
+            // Add a white plus/cross at center
+            const plusSize = 0.15;
+            const plusThickness = 0.02;
+            const plusMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xffffff,
+                side: THREE.DoubleSide
+            });
+            
+            // Horizontal bar
+            const hBarGeometry = new THREE.PlaneGeometry(plusSize, plusThickness);
+            const hBar = new THREE.Mesh(hBarGeometry, plusMaterial);
+            hBar.position.set(0, 0, 0);
+            galleryGroup.add(hBar);
+            
+            // Vertical bar
+            const vBarGeometry = new THREE.PlaneGeometry(plusThickness, plusSize);
+            const vBar = new THREE.Mesh(vBarGeometry, plusMaterial.clone());
+            vBar.position.set(0, 0, 0);
+            galleryGroup.add(vBar);
+
+            // Try to load images
+            const loader = new THREE.TextureLoader();
+            loader.setCrossOrigin('anonymous');
+            imagePositions.forEach((pos, index) => {
+                const imageUrl = `https://picsum.photos/${pos.orientation === 'portrait' ? '400/600' : '600/400'}?random=${index + 20}`;
+                loader.load(
+                    imageUrl,
+                    (texture) => {
+                        // Success - replace colored material with texture
+                        const width = pos.orientation === 'portrait' ? 1 : 1.6;
+                        const height = pos.orientation === 'portrait' ? 1.5 : 1;
+                        const geometry = new THREE.PlaneGeometry(width, height);
+                        const material = new THREE.MeshBasicMaterial({
+                            map: texture,
+                            side: THREE.DoubleSide
+                        });
+                        galleryMeshes[index].geometry.dispose();
+                        galleryMeshes[index].material.dispose();
+                        galleryMeshes[index].geometry = geometry;
+                        galleryMeshes[index].material = material;
+                        console.log(`Gallery image ${index} loaded successfully`);
+                    },
+                    undefined,
+                    (error) => {
+                        console.error(`Error loading gallery image ${index}:`, error);
+                    }
+                );
+            });
+
+            // Initialize raycaster and mouse
+            galleryRaycaster = new THREE.Raycaster();
+            galleryMouse = new THREE.Vector2();
+
+            // Event listeners
+            galleryRenderer.domElement.addEventListener('mousemove', handleGalleryMouseMove);
+            galleryRenderer.domElement.addEventListener('mousedown', handleGalleryMouseDown);
+            galleryRenderer.domElement.addEventListener('mouseup', handleGalleryMouseUp);
+            galleryRenderer.domElement.addEventListener('mouseleave', handleGalleryMouseUp);
+            window.addEventListener('resize', handleGalleryResize);
+
+            // Ajouter l'événement de clic sur l'icône de la galerie
+            galleryIconElement.addEventListener('click', toggleGalleryCanvasSize);
+
+            galleryRenderer.domElement.style.cursor = 'grab';
+
+            console.log('Gallery scene initialized with', galleryMeshes.length, 'meshes');
+
+            // Start animation
+            animateGallery();
+        }
+
+        // Mouse interaction handlers
+        function handleGalleryMouseMove(e) {
+            if (isGalleryDragging) {
+                const deltaX = e.clientX - previousGalleryMousePosition.x;
+                const deltaY = e.clientY - previousGalleryMousePosition.y;
+
+                galleryGroup.rotation.y += deltaX * 0.005;
+                galleryGroup.rotation.x += deltaY * 0.005;
+
+                previousGalleryMousePosition = { x: e.clientX, y: e.clientY };
+            } else {
+                galleryMouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                galleryMouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                galleryRaycaster.setFromCamera(galleryMouse, galleryCamera);
+                const intersects = galleryRaycaster.intersectObjects(galleryMeshes);
+
+                if (hoveredGalleryMesh && hoveredGalleryMesh !== intersects[0]?.object) {
+                    const scale = hoveredGalleryMesh.userData.originalScale;
+                    hoveredGalleryMesh.scale.set(scale, scale, scale);
+                    hoveredGalleryMesh = null;
+                }
+
+                if (intersects.length > 0) {
+                    const mesh = intersects[0].object;
+                    if (hoveredGalleryMesh !== mesh) {
+                        const scale = mesh.userData.originalScale * 1.15;
+                        mesh.scale.set(scale, scale, scale);
+                        hoveredGalleryMesh = mesh;
+                        galleryRenderer.domElement.style.cursor = 'pointer';
+                    }
+                } else {
+                    galleryRenderer.domElement.style.cursor = 'grab';
+                }
+            }
+        }
+
+        function handleGalleryMouseDown(e) {
+            isGalleryDragging = true;
+            previousGalleryMousePosition = { x: e.clientX, y: e.clientY };
+            galleryRenderer.domElement.style.cursor = 'grabbing';
+        }
+
+        function handleGalleryMouseUp() {
+            isGalleryDragging = false;
+            galleryRenderer.domElement.style.cursor = 'grab';
+        }
+
+        function handleGalleryResize() {
+            galleryCamera.aspect = window.innerWidth / window.innerHeight;
+            galleryCamera.updateProjectionMatrix();
+            galleryRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Animation loop for gallery
+        function animateGallery() {
+            requestAnimationFrame(animateGallery);
+
+            galleryMeshes.forEach((mesh) => {
+                mesh.lookAt(galleryCamera.position);
+            });
+
+            // Make the plus always face camera
+            galleryGroup.children.forEach(child => {
+                if (child.geometry && (child.geometry.type === 'PlaneGeometry') && 
+                    child.material.color.getHex() === 0xffffff) {
+                    child.lookAt(galleryCamera.position);
+                }
+            });
+
+            galleryRenderer.render(galleryScene, galleryCamera);
+        }
+
+        // Fonction pour basculer la taille du canvas de la galerie
+        function toggleGalleryCanvasSize() {
+            isGalleryCanvasExpanded = !isGalleryCanvasExpanded;
+            
+            if (isGalleryCanvasExpanded) {
+                galleryCanvasContainer.classList.add('expanded');
+                // Ajuster la position de la caméra pour la vue agrandie (moins rapproché)
+                galleryCamera.position.z = 6; // Position intermédiaire pour éviter d'être trop rapproché
+                console.log('Gallery canvas agrandi à l\'échelle 1');
+            } else {
+                galleryCanvasContainer.classList.remove('expanded');
+                // Ajuster la position de la caméra pour la vue réduite
+                galleryCamera.position.z = 8; // Plus loin pour voir l'ensemble
+                console.log('Gallery canvas réduit à l\'échelle 0.5');
+            }
+        }
+
+        // Initialize gallery when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Wait a bit for the first scene to initialize
+            setTimeout(initGallery, 1000);
+        });
     </script>
 </body>
 </html>
